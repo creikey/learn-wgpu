@@ -58,6 +58,27 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
+const OTHER_VERTICES: &[Vertex] = &[
+    Vertex { // upper left
+        position: [-0.5, 0.5, 0.0],
+        color: [0.5, 0.0, 0.5],
+    },
+    Vertex { // upper right
+        position: [0.5, 0.5, 0.0],
+        color: [0.5, 1.0, 0.5],
+    },
+    Vertex { // bottom left
+        position: [-0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.5],
+    }, 
+    Vertex { // bottom right
+        position: [0.5, -0.5, 0.0],
+        color: [0.5, 0.0, 0.5],
+    },
+];
+
+const OTHER_INDICES: &[u16] = &[0, 2, 3,   1, 0, 3];
+
 struct State {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -69,10 +90,12 @@ struct State {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
+    complex_shape: bool,
 
-    color_render_pipeline: wgpu::RenderPipeline,
-    use_color: bool,
     clear_col: wgpu::Color,
+    other_vertex_buffer: wgpu::Buffer,
+    other_index_buffer: wgpu::Buffer,
+    other_num_indices: u32,
 }
 
 impl State {
@@ -113,10 +136,6 @@ impl State {
 
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
-        let vs_color_module =
-            device.create_shader_module(&wgpu::include_spirv!("shader_with_color.vert.spv"));
-        let fs_color_module =
-            device.create_shader_module(&wgpu::include_spirv!("shader_with_color.frag.spv"));
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -174,10 +193,22 @@ impl State {
             contents: bytemuck::cast_slice(VERTICES),
             usage: wgpu::BufferUsage::VERTEX,
         });
-        
+
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsage::INDEX,
+        });
+        
+        let other_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Other Vertex Buffer"),
+            contents: bytemuck::cast_slice(OTHER_VERTICES),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
+
+        let other_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Other Index Buffer"),
+            contents: bytemuck::cast_slice(OTHER_INDICES),
             usage: wgpu::BufferUsage::INDEX,
         });
 
@@ -187,13 +218,6 @@ impl State {
             &sc_desc,
             &vs_module,
             &fs_module,
-        );
-        let color_render_pipeline = create_pipeline(
-            &device,
-            &render_pipeline_layout,
-            &sc_desc,
-            &vs_color_module,
-            &fs_color_module,
         );
         Self {
             surface,
@@ -207,14 +231,16 @@ impl State {
             index_buffer,
             num_indices: INDICES.len() as u32,
 
-            color_render_pipeline,
-            use_color: false,
+            complex_shape: false,
             clear_col: wgpu::Color {
                 r: 0.1,
                 g: 0.2,
                 b: 0.3,
                 a: 1.0,
             },
+            other_vertex_buffer,
+            other_index_buffer,
+            other_num_indices: OTHER_INDICES.len() as u32, // TODO test out what happens when I use a wrong number for this
         }
     }
 
@@ -236,7 +262,7 @@ impl State {
                 ..
             } = input
             {
-                self.use_color = !self.use_color;
+                self.complex_shape = !self.complex_shape;
             }
         }
         false
@@ -267,15 +293,16 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            if self.use_color {
-                render_pass.set_pipeline(&self.color_render_pipeline);
+            render_pass.set_pipeline(&self.render_pipeline);
+            if self.complex_shape {
+                render_pass.set_vertex_buffer(0, self.other_vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.other_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.other_num_indices, 0, 0..1);
             } else {
-                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
             }
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
