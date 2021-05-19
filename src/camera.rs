@@ -106,12 +106,17 @@ impl CameraController {
 
         // Prevents glitching when camera gets too close to the
         // center of the scene.
+        let mut new_eye = camera.eye;
         if self.is_forward_pressed && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed;
+            new_eye += forward_norm * self.speed;
         }
         if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
+            new_eye -= forward_norm * self.speed;
         }
+        if (camera.target - new_eye).magnitude() < 0.1 {
+            new_eye = camera.eye;
+        }
+        camera.eye = new_eye;
 
         let right = forward_norm.cross(camera.up);
 
