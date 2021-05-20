@@ -114,7 +114,7 @@ impl CameraController {
             new_eye -= forward_norm * self.speed;
         }
         if (camera.target - new_eye).magnitude() < 0.1 {
-            new_eye = camera.eye;
+            return;
         }
         camera.eye = new_eye;
 
