@@ -98,6 +98,7 @@ struct Uniforms {
     // We can't use cgmath with bytemuck directly so we'll have
     // to convert the Matrix4 into a 4x4 f32 array
     view_proj: [[f32; 4]; 4],
+    model: [[f32; 4]; 4],
 }
 
 impl Uniforms {
@@ -105,11 +106,17 @@ impl Uniforms {
         use cgmath::SquareMatrix;
         Self {
             view_proj: cgmath::Matrix4::identity().into(),
+            model: cgmath::Matrix4::identity().into(),
         }
     }
 
     fn update_view_proj(&mut self, camera: &Camera) {
         self.view_proj = camera.build_view_projection_matrix().into();
+    }
+
+    fn update_model_angle(&mut self, angle: cgmath::Rad<f32>) {
+        use cgmath::{Matrix4, Vector3};
+        self.model = Matrix4::from_axis_angle(Vector3::new(0.0, 1.0, 0.0), angle).into();
     }
 }
 
@@ -136,6 +143,7 @@ struct State {
     other_vertex_buffer: wgpu::Buffer,
     other_index_buffer: wgpu::Buffer,
     other_num_indices: u32,
+    model_angle: f32,
     other_bind_group: wgpu::BindGroup,
 }
 
@@ -399,6 +407,7 @@ impl State {
             },
             other_vertex_buffer,
             other_index_buffer,
+            model_angle: 0.0,
             other_num_indices: OTHER_INDICES.len() as u32, // TODO test out what happens when I use a wrong number for this
         }
     }
@@ -431,7 +440,16 @@ impl State {
     fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.uniforms.update_view_proj(&self.camera);
-        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
+        self.model_angle += 0.05;
+        self.uniforms.update_model_angle(cgmath::Rad {
+            0: self.model_angle,
+        });
+
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        );
     }
 
     // render pass
