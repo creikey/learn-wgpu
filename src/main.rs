@@ -588,19 +588,21 @@ impl State {
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
+            let indices;
             if self.complex_shape {
                 render_pass.set_bind_group(0, &self.other_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.other_vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(self.other_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.other_num_indices, 0, 0..1);
+                indices = self.other_num_indices;
             } else {
                 render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32);
+                indices = self.num_indices;
             }
+            render_pass.draw_indexed(0..indices, 0, 0..self.instances.len() as u32);
         }
 
         // submit will accept anything that implements IntoIter
