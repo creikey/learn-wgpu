@@ -1,10 +1,10 @@
+use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-use cgmath::prelude::*;
 
 mod texture;
 use texture::Texture;
@@ -209,6 +209,7 @@ struct State {
     uniform_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+    depth_texture: texture::Texture,
 
     complex_shape: bool,
     clear_col: wgpu::Color,
@@ -254,6 +255,9 @@ impl State {
             present_mode: wgpu::PresentMode::Fifo,
         };
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
+
+        let depth_texture =
+            texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -422,7 +426,7 @@ impl State {
                 layout: Some(layout),
                 vertex: wgpu::VertexState {
                     module: vert,
-                    entry_point: "main",        // 1.
+                    entry_point: "main",                             // 1.
                     buffers: &[Vertex::desc(), InstanceRaw::desc()], // 2.
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -445,7 +449,16 @@ impl State {
                     // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                     polygon_mode: wgpu::PolygonMode::Fill,
                 },
-                depth_stencil: None, // 1.
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: texture::Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+
+                    // requires DEPTH_CLAMPING
+                    clamp_depth: false,
+                }),
                 multisample: wgpu::MultisampleState {
                     count: 1,                         // 2.
                     mask: !0,                         // 3.
@@ -505,6 +518,7 @@ impl State {
             uniform_bind_group,
             instances,
             instance_buffer,
+            depth_texture,
 
             complex_shape: false,
             clear_col: wgpu::Color {
@@ -525,6 +539,8 @@ impl State {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+        self.depth_texture =
+            texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -580,7 +596,14 @@ impl State {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
