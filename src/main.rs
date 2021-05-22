@@ -218,6 +218,7 @@ struct State {
     other_num_indices: u32,
     model_angle: f32,
     other_bind_group: wgpu::BindGroup,
+    depth_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -326,6 +327,31 @@ impl State {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
+        let depth_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                            sample_type: wgpu::TextureSampleType::Depth,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler {
+                            comparison: true,
+                            filtering: true,
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("depth_bind_group_layout"),
+            });
         let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
@@ -353,6 +379,20 @@ impl State {
                 },
             ],
             label: Some("other_bind_group"),
+        });
+        let depth_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &depth_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&depth_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&depth_texture.sampler),
+                },
+            ],
+            label: Some("depth_bind_group"),
         });
 
         let camera = Camera {
@@ -410,7 +450,11 @@ impl State {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
+                bind_group_layouts: &[
+                    &texture_bind_group_layout,
+                    &uniform_bind_group_layout,
+                    &depth_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -531,6 +575,7 @@ impl State {
             other_index_buffer,
             model_angle: 0.0,
             other_num_indices: OTHER_INDICES.len() as u32, // TODO test out what happens when I use a wrong number for this
+            depth_bind_group,
         }
     }
 
@@ -609,6 +654,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
 
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.depth_bind_group, &[]);
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
             let indices;
