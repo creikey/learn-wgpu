@@ -335,7 +335,7 @@ impl State {
                         visibility: wgpu::ShaderStage::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                            view_dimension: wgpu::TextureViewDimension::D2,
                             sample_type: wgpu::TextureSampleType::Depth,
                         },
                         count: None,
@@ -495,8 +495,8 @@ impl State {
                     polygon_mode: wgpu::PolygonMode::Fill,
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
-                    format: texture::Texture::DEPTH_FORMAT,
-                    depth_write_enabled: true,
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: false,
                     depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
